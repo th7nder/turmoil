@@ -1,8 +1,11 @@
 use indexmap::IndexMap;
 #[cfg(feature = "regex")]
 use regex::Regex;
-use std::net::{IpAddr, SocketAddr};
+use std::{net::{IpAddr, SocketAddr}, ops::Index};
 
+/// Each new registered host is thought to have an IP in a subnet 192.168.0.0/24
+/// This is just a choice.
+/// localhost always resolves to 127.0.0.1, there is no localhost implementation for IPv6.
 pub struct Dns {
     next: u16,
     names: IndexMap<String, IpAddr>,
@@ -24,9 +27,15 @@ pub trait ToSocketAddrs: sealed::Sealed {
 
 impl Dns {
     pub(crate) fn new() -> Dns {
+        let mut names: IndexMap<String, IpAddr> = IndexMap::new();
+        names.insert(
+            "localhost".to_string(), 
+            std::net::Ipv4Addr::LOCALHOST.into()
+        );
+
         Dns {
             next: 1,
-            names: IndexMap::new(),
+            names
         }
     }
 
@@ -62,7 +71,7 @@ impl<'a> ToIpAddr for &'a str {
             let a = (host >> 8) as u8;
             let b = (host & 0xFF) as u8;
 
-            std::net::Ipv4Addr::new(127, 0, a, b).into()
+            std::net::Ipv4Addr::new(192, 168, a, b).into()
         })
     }
 }

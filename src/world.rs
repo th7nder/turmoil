@@ -1,11 +1,11 @@
-use crate::envelope::Protocol;
+use crate::envelope::{Protocol, Envelope};
 use crate::{config, Dns, Host, ToIpAddr, ToIpAddrs, Topology, TRACING_TARGET};
 
 use indexmap::IndexMap;
 use rand::RngCore;
 use scoped_tls::scoped_thread_local;
 use std::cell::RefCell;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 /// Tracks all the state for the simulated world.
@@ -101,6 +101,10 @@ impl World {
 
         tracing::info!(target: TRACING_TARGET, hostname = ?self.dns.reverse(addr), ?addr, "New");
 
+        // Register topology between itself
+        // self.topology.register(addr, addr);
+        // self.topology.register(addr, Ipv4Addr::LOCALHOST.into());
+
         // Register links between the new host and all existing hosts
         for existing in self.hosts.keys() {
             self.topology.register(*existing, addr);
@@ -113,8 +117,30 @@ impl World {
     /// Send `message` from `src` to `dst`. Delivery is asynchronous and not
     /// guaranteed.
     pub(crate) fn send_message(&mut self, src: SocketAddr, dst: SocketAddr, message: Protocol) {
-        self.topology
+        if dst.ip().is_loopback() {
+            if let Some(host) = self.hosts.get_mut(&src.ip()) {
+                let _ = host.receive_from_network(Envelope {
+                    src,
+                    dst,
+                    message
+                });
+                // TODO: handle err? should we enqueue?
+            }
+            // TODO: handle err
+        } else if src.ip().is_loopback() { 
+            if let Some(host) = self.hosts.get_mut(&dst.ip()) {
+                let _ = host.receive_from_network(Envelope {
+                    src,
+                    dst,
+                    message
+                });
+                // TODO: handle err? should we enqueue?
+            }
+        
+        } else {
+            self.topology
             .enqueue_message(&mut self.rng, src, dst, message);
+        }
     }
 
     /// Tick the host at `addr` by `duration`.

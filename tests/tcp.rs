@@ -11,6 +11,7 @@ use tokio::{
     sync::Notify,
     time::timeout,
 };
+use tokio_test::assert_ok;
 use turmoil::{
     net::{TcpListener, TcpStream},
     Builder, Result,
@@ -24,6 +25,67 @@ fn assert_error_kind<T>(res: io::Result<T>, kind: io::ErrorKind) {
 
 async fn bind() -> std::result::Result<TcpListener, std::io::Error> {
     TcpListener::bind((IpAddr::from(Ipv4Addr::UNSPECIFIED), PORT)).await
+}
+
+    // server is bound to 0.0.0.0
+    // do we allow it to connect from 127.0.0.1, while spawning a stream inside a host?
+
+    // it registers hosts as 127.0.0.1, 127.0.0.2...
+    // TcpStream::connect doesnt know what's 'localhost', it's just a name.
+
+    // currently we can connect from 127.0.0.2 to 127.0.0.1
+
+    // why it connects on different port???
+    // how do i know i'm connecting from a host?
+
+#[test]
+fn connects_within_a_host() -> Result {
+    let mut sim = Builder::new().build();
+
+    sim.host("server", || async {
+        let listener = TcpListener::bind((IpAddr::from(Ipv4Addr::LOCALHOST), PORT)).await?;
+
+        tokio::spawn(async move {
+            loop {
+                if let Ok((mut stream, _socket)) = listener.accept().await {
+                    let _ = stream.write_u8(7).await;
+                }
+            }
+        });
+
+        // let mut stream = TcpStream::connect(("localhost", PORT))
+        //     .await
+        //     .expect("should have connected");
+
+        // assert_eq!(7, stream.read_u8().await.expect("successful read"));
+
+        // let mut stream = TcpStream::connect(("127.0.0.1", PORT))
+        // .await
+        // .expect("should have connected");
+
+        // assert_eq!(7, stream.read_u8().await.expect("successful read"));
+
+        Ok(())
+    });
+
+    sim.client("client", async {
+        let x = timeout(
+            Duration::from_secs(1), 
+            TcpStream::connect(("server", PORT))).await.unwrap();
+        assert_error_kind(
+            x,
+            io::ErrorKind::ConnectionRefused,
+        );
+
+        // assert_error_kind(
+        //     TcpStream::connect(("localhost", PORT)).await,
+        //     io::ErrorKind::ConnectionRefused,
+        // );
+
+        Ok(())
+    });
+
+    sim.run()
 }
 
 #[test]

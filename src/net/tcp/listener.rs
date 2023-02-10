@@ -1,4 +1,4 @@
-use std::{io::Result, net::SocketAddr, sync::Arc};
+use std::{io::{Result, ErrorKind}, net::SocketAddr, sync::Arc};
 
 use tokio::sync::Notify;
 
@@ -25,18 +25,24 @@ impl TcpListener {
     ///
     /// The returned listener is ready for accepting connections.
     ///
-    /// Only 0.0.0.0 is currently supported.
+    /// If you bind to the 0.0.0.0, you're effectivly binding to the generated IP address of the host.
+    /// See the Dns class for the current IP assignment.
+    /// 
+    /// You can to `localhost`, which translates to 127.0.0.1.
+    /// It allows for the TCP socket to be only visible within a host and reachable *only* via localhost IPv4/IPv6 addresses.
     pub async fn bind<A: ToSocketAddrs>(addr: A) -> Result<TcpListener> {
         World::current(|world| {
             let mut addr = addr.to_socket_addr(&world.dns);
             let host = world.current_host_mut();
 
-            if !addr.ip().is_unspecified() {
-                panic!("{addr} is not supported");
-            }
 
             // Unspecified -> host's IP
-            addr.set_ip(host.addr);
+            if addr.ip().is_unspecified() {
+                addr.set_ip(host.addr);
+            }
+            //     } else if addr.ip() != host.addr {
+            //     return Result::Err(ErrorKind::AddrNotAvailable);
+            // }
 
             host.tcp.bind(addr)
         })

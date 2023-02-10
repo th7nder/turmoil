@@ -32,7 +32,8 @@ struct Pair(IpAddr, IpAddr);
 
 impl Pair {
     fn new(a: IpAddr, b: IpAddr) -> Pair {
-        assert_ne!(a, b);
+        // this does not allow to connect from localhost to localhost
+        // assert_ne!(a, b);
 
         if a < b {
             Pair(a, b)
